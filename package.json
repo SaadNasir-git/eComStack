@@ -4,7 +4,9 @@
   "description": "",
   "main": "server.ts",
   "scripts": {
-    "dev": "node --watch src/server.ts"
+    "dev": "node --watch src/server.ts",
+    "db:generate": "pnpm drizzle-kit generate",
+    "db:migrate": "pnpm drizzle-kit migrate"
   },
   "repository": {
     "type": "git",
@@ -19,10 +21,16 @@
   },
   "homepage": "https://github.com/SaadNasir-git/eComStack#readme",
   "dependencies": {
-    "@types/node": "^26.6.2",
     "dotenv": "^18.0.1",
+    "drizzle-orm": "1.0.0-rc.4",
     "fastify": "^5.12.5",
-    "tsx": "^4.23.13",
+    "pg": "^8.23.0",
     "typescript": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "1.0.0-rc.4",
+    "tsx": "^4.23.13"
   }
 }
