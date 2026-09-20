@@ -4,7 +4,7 @@
     "allowImportingTsExtensions": true,
     "target": "ES2023",
     "module": "NodeNext",
-    "rootDir": "./src",
+    "rootDir": "/",
     "outDir": "./dist",
     "lib": [
       "ES2023"
