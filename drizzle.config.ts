@@ -1,5 +1,5 @@
 import { defineConfig } from 'drizzle-kit';
-import { eComConfig } from './ecom.config.ts';
+import { eComConfig } from './ecom.config';
 
 export default defineConfig({
   out: './drizzle/migrations',
@@ -7,7 +7,5 @@ export default defineConfig({
   dialect: 'postgresql',
   dbCredentials: {
     url: eComConfig.env.DATABASE_URL,
-  },
-  strict: true,
-  verbose: true
+  }
 });
