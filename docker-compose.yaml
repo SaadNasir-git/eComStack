@@ -4,7 +4,7 @@ services:
     environment:
       - POSTGRES_PASSWORD=password
       - POSTGRES_USER=postgres
-      - POSTGRES_DB=codeinease
+      - POSTGRES_DB=ecommerce
     ports:
       - 5432:5432
     volumes:
