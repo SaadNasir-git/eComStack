@@ -1,12 +1,12 @@
 import { buildApp } from "./app.ts";
-import 'dotenv/config'
+import { eComConfig } from '../ecom.config.ts'
 
 const app = buildApp();
 
 const start = async () => {
   try {
     await app.listen({
-      port: Number(process.env.PORT!),
+      port: eComConfig.env.PORT,
       host: '0.0.0.0',
     });
   } catch (error) {

@@ -51,5 +51,4 @@ export const relations = defineRelations({ users, userDevices, userDetails }, (r
             to: r.users.id,
         }),
     },
-}),
-);
+}));
