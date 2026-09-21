@@ -1,5 +1,5 @@
-import { defineRelations } from "drizzle-orm";
-import { pgTable, uuid, timestamp, boolean, pgEnum, text, varchar } from "drizzle-orm/pg-core";
+import { defineRelations } from 'drizzle-orm'
+import { pgTable, uuid, timestamp, pgEnum, text, varchar } from "drizzle-orm/pg-core";
 
 export const RoleEnum = pgEnum("userRole", ["user", "admin"]);
 
@@ -9,7 +9,6 @@ export const users = pgTable("users", {
     email: text().notNull().unique(),
     passwordHash: text(),
     role: RoleEnum().default("user"),
-    isVerified: boolean().default(false),
     createdAt: timestamp("created_at", { mode: "date" }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { mode: "date" }).$onUpdate(() => new Date())
 });
@@ -18,7 +17,7 @@ export const userDevices = pgTable("userDevices", {
     id: uuid().primaryKey().defaultRandom(),
     userId: varchar({ length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
     refreshToken: text(),
-    lastUse: timestamp({ mode: "date" }).$onUpdate(() => new Date())
+    lastUse: timestamp({ mode: "date" }).defaultNow().notNull()
 });
 
 export const userDetails = pgTable("userDetails", {

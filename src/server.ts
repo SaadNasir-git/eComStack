@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { eComConfig } from '@/ecom.config';
-import db from '@/plugins/db';
+import { register } from './registration';
 
 const start = async () => {
   const fastify = Fastify({
@@ -10,10 +10,7 @@ const start = async () => {
   fastify.get('/health', async () => ({ status: 'ok' }));
 
   try {
-    await fastify.register(async function registration(instance) {
-      await instance.register(db);
-    }, { prefix: eComConfig.env.PREFIX });
-
+    await fastify.register((instance) => register(instance), { prefix: eComConfig.env.PREFIX });
     await fastify.listen({
       port: eComConfig.env.PORT,
       host: '0.0.0.0',
