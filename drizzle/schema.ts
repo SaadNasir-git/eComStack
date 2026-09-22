@@ -16,8 +16,8 @@ export const users = pgTable("users", {
 export const userDevices = pgTable("userDevices", {
     id: uuid().primaryKey().defaultRandom(),
     userId: varchar({ length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
-    refreshToken: text(),
-    lastUse: timestamp({ mode: "date" }).defaultNow().notNull()
+    refreshToken: text().notNull(),
+    lastUse: timestamp({ mode: "date" }).$onUpdate(() => new Date())
 });
 
 export const userDetails = pgTable("userDetails", {

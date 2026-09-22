@@ -1,7 +1,7 @@
 import { type FastifyInstance, type FastifyPluginOptions } from "fastify";
 import { Type } from "@sinclair/typebox";
 import { userDevices, users } from "@/drizzle/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { FastifyTypeProvider } from "@/utils/fastifyTypeProvider";
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { TimeUnit } from "@valkey/valkey-glide";
@@ -11,14 +11,16 @@ const createUserSignupSchema = Type.Object({
     name: Type.String(),
     email: Type.String({ format: 'email' }),
     password: Type.String({
-        minLength: 8
+        minLength: 8,
+        maxLength: 72
     })
 });
 
 const createUserLoginSchema = Type.Object({
     email: Type.String({ format: 'email' }),
     password: Type.String({
-        minLength: 8
+        minLength: 8,
+        maxLength: 72
     }),
     strategy: Type.Union([
         Type.Literal("url"),
@@ -42,12 +44,13 @@ const createForgotPasswordSchema = Type.Object({
 const createResetPasswordSchema = Type.Object({
     token: Type.String(),
     password: Type.String({
-        minLength: 8
+        minLength: 8,
+        maxLength: 72
     })
 })
 
 const safeRedirect = (input: string): string => {
-    if (!input.startsWith('/') || input.startsWith('//')) return '/';
+    if (!input.startsWith('/') || input.startsWith('//') || input.includes('\\')) return '/';
     return input;
 };
 
@@ -148,14 +151,12 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
                 message: "Verification Email will be sent to your email shortly."
             })
         } else {
-            await fastify.valkey.hset(`LOGIN_SESSION:${uniqueId}`, {
+            await fastify.valkey.set(`LOGIN_SESSION:${uniqueId}`, JSON.stringify({
                 userId: result.userId,
                 email: body.email,
-                strategy: 'otp',
-                resendCount: '0',
-                lastSentAt: String(Date.now()),
-            });
-            await fastify.valkey.expire(`LOGIN_SESSION:${uniqueId}`, 15 * 60);
+                resendCount: 0,
+                lastSentAt: Date.now(),
+            }), { expiry: { type: TimeUnit.Seconds, count: 15 * 60 } });
 
             const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
             const hashedCode = hmac(code.toString());
@@ -171,7 +172,7 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
                 email: body.email,
                 code
             })
-            reply.code(202);
+
             reply.setCookie('uniqueId', uniqueId, {
                 httpOnly: true,
                 secure: eComConfig.env.NODE_ENV === 'production',
@@ -179,7 +180,7 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
                 maxAge: 15 * 60
             })
 
-            return reply.send({
+            return reply.code(202).send({
                 message: "OTP will be sent to your email shortly"
             })
         }
@@ -213,7 +214,7 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
         const tokenDetails: { userId: string; callBackUrl: string } = JSON.parse(tokenDetailsString.toString())
 
         const [result] = await fastify.db.select({
-            id: users.id
+            userId: users.id
         }).from(users).where(eq(users.id, tokenDetails.userId));
 
         if (!result) {
@@ -222,8 +223,17 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             })
         }
 
+        const deviceId = randomUUID()
+        const refreshToken = fastify.jwt.sign({
+            deviceId: deviceId
+        }, {
+            expiresIn: '7d'
+        });
+
         const [insertResult] = await fastify.db.insert(userDevices).values({
-            userId: result.id
+            userId: result.userId,
+            refreshToken: (await fastify.bcrypt.hash(refreshToken)),
+            id: deviceId
         }).returning({
             id: userDevices.id
         });
@@ -234,17 +244,12 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             });
         }
 
-        const refreshToken = fastify.jwt.sign({
-            deviceId: insertResult.id
-        }, {
-            expiresIn: '7d'
-        });
 
         reply.setCookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: eComConfig.env.NODE_ENV === "production",
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60
+            maxAge: 7 * 24 * 60 * 60
         });
 
         return reply.redirect(tokenDetails.callBackUrl);
@@ -273,25 +278,23 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
         if (!isCorrect) {
             codeDetails.tries += 1;
             if (codeDetails.tries >= 5) {
-                await fastify.valkey.del([`OTP:${uniqueId}`]);
+                await fastify.valkey.del([`OTP:${uniqueId}`, `LOGIN_SESSION:${uniqueId}`]);
+                reply.clearCookie('uniqueId')
                 return reply.code(400).send({ message: 'Too many attempts. Please login again.' });
             }
 
             await fastify.valkey.set(`OTP:${uniqueId}`, JSON.stringify(codeDetails), {
-                expiry: {
-                    type: TimeUnit.Seconds,
-                    count: 5 * 60
-                }
+                expiry: "keepExisting"
             });
             return reply.code(400).send({
                 message: "Invalid OTP."
             })
         }
 
-        await fastify.valkey.del([`OTP:${uniqueId}`]);
+        await fastify.valkey.del([`OTP:${uniqueId}`, `LOGIN_SESSION:${uniqueId}`]);
 
         const [result] = await fastify.db.select({
-            id: users.id
+            userId: users.id
         }).from(users)
             .where(eq(users.id, codeDetails.userId.toString()));
 
@@ -301,8 +304,17 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             })
         }
 
+        const deviceId = randomUUID()
+        const refreshToken = fastify.jwt.sign({
+            deviceId: deviceId
+        }, {
+            expiresIn: '7d'
+        })
+
         const [insertResult] = await fastify.db.insert(userDevices).values({
-            userId: result.id
+            userId: result.userId,
+            refreshToken: (await fastify.bcrypt.hash(refreshToken)),
+            id: deviceId
         }).returning({
             id: userDevices.id
         });
@@ -313,18 +325,13 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             });
         }
 
-        const refreshToken = fastify.jwt.sign({
-            deviceId: insertResult.id
-        }, {
-            expiresIn: '7d'
-        });
-
         reply.setCookie('refreshToken', refreshToken, {
             httpOnly: true,
             secure: eComConfig.env.NODE_ENV === "production",
             sameSite: 'lax',
-            maxAge: 7 * 24 * 60
+            maxAge: 7 * 24 * 60 * 60
         });
+        reply.clearCookie('uniqueId')
 
         return reply.send({
             message: "User verified successfully"
@@ -342,25 +349,33 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             return reply.code(400).send({ message: 'Session expired. Please login again.' });
         }
 
-        const session = JSON.parse(sessionRaw.toString());
+        const session: {
+            userId: string,
+            email: string,
+            resendCount: number,
+            lastSentAt: number,
+        } = JSON.parse(sessionRaw.toString());
 
         if (Date.now() - session.lastSentAt < 60_000) {
             return reply.code(429).send({ message: 'Please wait before requesting another code.' });
         }
 
-        if (Number(session.resendCount) >= 5) {
+        if (session.resendCount >= 5) {
+            await fastify.valkey.del([`LOGIN_SESSION:${uniqueId}`, `OTP:${uniqueId}`]);
+            reply.clearCookie('uniqueId')
             return reply.code(429).send({ message: 'Too many resends. Please login again.' });
         }
 
         const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
-        await fastify.valkey.set(`OTP:${uniqueId}`, JSON.stringify({ code: hmac(code), tries: 0 }), {
+        await fastify.valkey.set(`OTP:${uniqueId}`, JSON.stringify({ userId: session.userId, code: hmac(code), tries: 0 }), {
             expiry: { type: TimeUnit.Seconds, count: 5 * 60 },
         });
 
-        await fastify.valkey.hset(`LOGIN_SESSION:${uniqueId}`, {
-            resendCount: String(Number(session.resendCount) + 1),
-            lastSentAt: String(Date.now()),
-        });
+        await fastify.valkey.set(`LOGIN_SESSION:${uniqueId}`, JSON.stringify({
+            ...session,
+            resendCount: session.resendCount + 1,
+            lastSentAt: Date.now(),
+        }), { expiry: "keepExisting" });
 
         await fastify.authQueue.add('otp', { email: session.email, code });
 
@@ -381,15 +396,14 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             })
         }
 
-        const uniqueId = randomUUID();
+        const tokenId = randomUUID();
         const token = fastify.jwt.sign({
-            id: uniqueId,
+            userId: result.id,
+            tokenId: tokenId,
             purpose: 'forgot-password'
-        }, {
-            expiresIn: '30m'
-        })
+        }, { expiresIn: '30m' });
 
-        await fastify.valkey.set(`RESET_PASSWORD:${uniqueId}`, result.id, {
+        await fastify.valkey.set(`RESET_PASSWORD:${result.id}`, tokenId, {
             expiry: {
                 type: TimeUnit.Seconds,
                 count: 30 * 60
@@ -408,10 +422,10 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
 
     fastify.post('/auth/reset-password', { schema: { body: createResetPasswordSchema } }, async (request, reply) => {
         const body = request.body;
-        let decodedPayload: { id: string; purpose: string };
+        let decodedPayload: { userId: string; tokenId: string; purpose: string };
         try {
-            decodedPayload = fastify.jwt.verify<{ id: string; purpose: string }>(body.token);
-        } catch (error) {
+            decodedPayload = fastify.jwt.verify<{ userId: string; tokenId: string; purpose: string }>(body.token);
+        } catch {
             return reply.code(400).send({
                 message: "Invalid Token"
             })
@@ -423,23 +437,197 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             })
         }
 
-        const userId = await fastify.valkey.get(`RESET_PASSWORD:${decodedPayload.id}`);
-        if (!userId) {
+        const tokenId = await fastify.valkey.get(`RESET_PASSWORD:${decodedPayload.userId}`);
+        if (!tokenId || tokenId.toString() !== decodedPayload.tokenId) {
             return reply.code(400).send({
                 message: "Token has been expired"
             })
         }
 
-        await fastify.valkey.del([`RESET_PASSWORD:${decodedPayload.id}`]);
+        await fastify.valkey.del([`RESET_PASSWORD:${decodedPayload.userId}`]);
 
         const passwordHash = await fastify.bcrypt.hash(body.password)
         await fastify.db.update(users).set({
             passwordHash: passwordHash
-        }).where(eq(users.id, userId.toString()));
+        }).where(eq(users.id, decodedPayload.userId));
 
         await fastify.db.delete(userDevices)
-            .where(eq(userDevices.userId, userId.toString()));
+            .where(eq(userDevices.userId, decodedPayload.userId));
 
         return reply.code(200).send({ message: "Password updated successfully" });
-    })
+    });
+
+    fastify.get('/auth/access-token', async (request, reply) => {
+        const refreshToken = request.cookies.refreshToken;
+        if (!refreshToken) {
+            return reply.code(401).send({ message: 'Unauthorized' });
+        }
+
+        let decoded: { deviceId: string };
+        try {
+            decoded = fastify.jwt.verify<{ deviceId: string }>(refreshToken);
+        } catch {
+            return reply.code(401).send({ message: 'Session expired. Please log in again.' });
+        }
+
+        const [user] = await fastify.db
+            .select({
+                deviceId: userDevices.id,
+                userId: userDevices.userId,
+                email: users.email,
+                name: users.name,
+                refreshToken: userDevices.refreshToken,
+            })
+            .from(userDevices)
+            .innerJoin(users, eq(users.id, userDevices.userId))
+            .where(eq(userDevices.id, decoded.deviceId));
+
+
+        if (!user) {
+            reply.clearCookie('refreshToken');
+            return reply.code(401).send({ message: 'Session revoked. Please log in again.' });
+        }
+
+        const isCorrect = await fastify.bcrypt.compare(refreshToken, user.refreshToken);
+
+        if (!isCorrect) {
+            reply.clearCookie('refreshToken');
+            return reply.code(401).send({ message: 'Session revoked. Please log in again.' });
+        }
+
+        const accessToken = fastify.jwt.sign({
+            userId: user.userId,
+            email: user.email,
+            name: user.name,
+            deviceId: user.deviceId
+        }, { expiresIn: '15m' });
+
+        return reply.send({ accessToken });
+    });
+
+    fastify.post('/auth/rotate', async (request, reply) => {
+        const refreshToken = request.cookies.refreshToken;
+        if (!refreshToken) {
+            return reply.code(401).send({ message: 'Unauthorized' });
+        }
+
+        let decoded: { deviceId: string; iat: number };
+        try {
+            decoded = fastify.jwt.verify<{ deviceId: string; iat: number }>(refreshToken);
+        } catch {
+            return reply.code(401).send({ message: 'Session expired. Please log in again.' });
+        }
+
+        const [user] = await fastify.db
+            .select({
+                deviceId: userDevices.id,
+                userId: userDevices.userId,
+                email: users.email,
+                name: users.name,
+                refreshToken: userDevices.refreshToken,
+            })
+            .from(userDevices)
+            .innerJoin(users, eq(users.id, userDevices.userId))
+            .where(eq(userDevices.id, decoded.deviceId));
+
+        if (!user) {
+            reply.clearCookie('refreshToken');
+            return reply.code(401).send({ message: 'Session revoked. Please log in again.' });
+        }
+
+        const isCorrect = await fastify.bcrypt.compare(refreshToken, user.refreshToken);
+        if (!isCorrect) {
+            reply.clearCookie('refreshToken');
+            return reply.code(401).send({ message: 'Session revoked. Please log in again.' });
+        }
+
+        const accessToken = fastify.jwt.sign({
+            userId: user.userId,
+            email: user.email,
+            name: user.name,
+            deviceId: user.deviceId
+        }, { expiresIn: '15m' });
+
+        const ageSeconds = Math.floor(Date.now() / 1000) - decoded.iat;
+        const shouldRotate = ageSeconds >= 24 * 60 * 60;
+
+        if (!shouldRotate) {
+            return reply.send({ accessToken });
+        }
+
+        const newRefreshToken = fastify.jwt.sign(
+            { deviceId: user.deviceId },
+            { expiresIn: '7d' }
+        );
+
+        const newHash = await fastify.bcrypt.hash(newRefreshToken);
+
+        const [updated] = await fastify.db.update(userDevices)
+            .set({ refreshToken: newHash })
+            .where(and(
+                eq(userDevices.id, user.deviceId),
+                eq(userDevices.refreshToken, user.refreshToken)
+            ))
+            .returning({ id: userDevices.id })
+
+        if (!updated) {
+            return reply.send({ accessToken });
+        }
+
+        reply.setCookie('refreshToken', newRefreshToken, {
+            httpOnly: true,
+            secure: eComConfig.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60,
+        });
+
+        return reply.send({ accessToken });
+    });
+
+    fastify.post('/auth/logout', async (request, reply) => {
+        const refreshToken = request.cookies.refreshToken;
+
+        if (refreshToken) {
+            try {
+                const decoded = fastify.jwt.verify<{ deviceId: string }>(refreshToken);
+                await fastify.db
+                    .delete(userDevices)
+                    .where(eq(userDevices.id, decoded.deviceId));
+            } catch (error) {
+                request.log.warn({ err: error }, 'logout: invalid refresh token');
+            }
+        }
+
+        reply.clearCookie('refreshToken');
+        return reply.code(200).send({ message: 'Logged out.' });
+    });
+
+    fastify.post('/auth/logout-all', async (request, reply) => {
+        const refreshToken = request.cookies.refreshToken;
+        if (!refreshToken) {
+            return reply.code(401).send({ message: "Unauthorized" });
+        }
+
+        let decoded: { deviceId: string };
+        try {
+            decoded = fastify.jwt.verify<{ deviceId: string }>(refreshToken);
+        } catch {
+            reply.clearCookie('refreshToken');
+            return reply.code(401).send({ message: "Session expired." });
+        }
+
+        const [device] = await fastify.db
+            .select({ userId: userDevices.userId })
+            .from(userDevices)
+            .where(eq(userDevices.id, decoded.deviceId));
+
+        if (device) {
+            await fastify.db
+                .delete(userDevices)
+                .where(eq(userDevices.userId, device.userId));
+        }
+
+        reply.clearCookie('refreshToken');
+        return reply.code(200).send({ message: 'Logged out of all devices.' });
+    });
 }
