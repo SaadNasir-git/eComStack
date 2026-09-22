@@ -7,7 +7,7 @@ import type { AuthJobMap, AuthJobName } from '@/plugins/bullMq';
 
 type AuthJobData = AuthJobMap[AuthJobName];
 
-export default async function startAuthWorker(instance: FastifyInstance) {
+export async function startAuthWorker(instance: FastifyInstance) {
     const connection = createValkeyGlideClient(instance.valkey);
 
     const authWorker = new Worker<AuthJobData, void, AuthJobName>(
@@ -84,9 +84,11 @@ export default async function startAuthWorker(instance: FastifyInstance) {
         },
     );
 
-    instance.addHook('onClose', async () => {
-        await authWorker.close();
-    });
+    authWorker.on('error', (err) => instance.log.error({ err }, 'auth worker error'));
+    authWorker.on('failed', (job, err) => instance.log.error({ jobId: job?.id, err }, 'auth job failed'));
+    authWorker.on('stalled', (jobId) => instance.log.warn({ jobId }, 'auth job stalled'));
+
+    instance.log.info('auth worker started');
 
     return authWorker;
 }

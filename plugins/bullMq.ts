@@ -31,6 +31,14 @@ async function bullMqPlugin(instance: FastifyInstance) {
     throw new Error('fastify-valkey-glide must be registered before the BullMQ plugin');
   }
 
+  try {
+    await instance.valkey.ping();
+    instance.log.info('Successfully connected to Valkey for BullMQ');
+  } catch (err) {
+    instance.log.error({ err }, 'Failed to connect to Valkey for BullMQ');
+    throw err;
+  }
+
   const connection = createValkeyGlideClient(instance.valkey);
 
   const authQueue = new Queue('auth-email-queue', {

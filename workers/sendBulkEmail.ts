@@ -1,7 +1,7 @@
 import { createValkeyGlideClient, Worker } from 'bullmq';
 import type { FastifyInstance } from 'fastify';
 
-export default async function startBulkWorker(instance: FastifyInstance) {
+export async function startBulkWorker(instance: FastifyInstance) {
   const connection = createValkeyGlideClient(instance.valkey);
 
   const bulkWorker = new Worker(
