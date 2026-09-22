@@ -477,6 +477,7 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
                 email: users.email,
                 name: users.name,
                 refreshToken: userDevices.refreshToken,
+                role: users.role
             })
             .from(userDevices)
             .innerJoin(users, eq(users.id, userDevices.userId))
@@ -499,7 +500,8 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             userId: user.userId,
             email: user.email,
             name: user.name,
-            deviceId: user.deviceId
+            deviceId: user.deviceId,
+            role: user.role
         }, { expiresIn: '15m' });
 
         return reply.send({ accessToken });
@@ -525,6 +527,7 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
                 email: users.email,
                 name: users.name,
                 refreshToken: userDevices.refreshToken,
+                role: users.role
             })
             .from(userDevices)
             .innerJoin(users, eq(users.id, userDevices.userId))
@@ -545,7 +548,8 @@ export const authModule = (baseFastify: FastifyInstance, otps: FastifyPluginOpti
             userId: user.userId,
             email: user.email,
             name: user.name,
-            deviceId: user.deviceId
+            deviceId: user.deviceId,
+            role: user.role
         }, { expiresIn: '15m' });
 
         const ageSeconds = Math.floor(Date.now() / 1000) - decoded.iat;
