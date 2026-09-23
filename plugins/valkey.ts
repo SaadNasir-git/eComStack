@@ -1,15 +1,19 @@
 import fp from 'fastify-plugin';
 import fastifyValkey from '@fastify/valkey-glide';
-import { eComConfig } from '@/ecom.config';
+import type { FastifyPluginAsync } from 'fastify';
 
-export default fp(
-  async (fastify) => {
-    await fastify.register(fastifyValkey, {
-      addresses: [{
-        host: eComConfig.env.VALKEY.HOST,
-        port: eComConfig.env.VALKEY.PORT,
-      }],
-    });
-  },
-  { name: 'valkey' }
-);
+interface valkeyPluginOptions {
+  host: string;
+  port: number;
+}
+
+const valkeyPlugin: FastifyPluginAsync<valkeyPluginOptions> = async (fastify, options) => {
+  await fastify.register(fastifyValkey, {
+    addresses: [{
+      host: options.host,
+      port: options.port,
+    }],
+  });
+}
+
+export default fp(valkeyPlugin, { name: 'valkey' });

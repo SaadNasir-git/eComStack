@@ -15,7 +15,7 @@ export const config = {
     }
 }
 
-export const handler = async (request: FastifyRequest<{ Querystring: Static<typeof config.schema.querystring> }>, reply: FastifyReply) => {
+export const handler = async (request: FastifyRequest<{ Querystring: Static<typeof schema> }>, reply: FastifyReply) => {
     const fastify = request.server;
     const { token } = request.query;
     let decodedPayload: { id: string; purpose: string };

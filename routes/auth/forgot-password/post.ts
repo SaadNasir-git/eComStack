@@ -1,5 +1,6 @@
 import { users } from "@/drizzle/schema";
 import { eComConfig } from "@/ecom.config";
+import type { RouteConfig } from "@/types/router";
 import { Type, type Static } from "@sinclair/typebox";
 import { TimeUnit } from "@valkey/valkey-glide";
 import { eq } from "drizzle-orm";
@@ -14,9 +15,9 @@ export const config = {
     schema: {
         body: schema
     }
-}
+} satisfies RouteConfig;
 
-export const handler = async (request: FastifyRequest<{Body: Static<typeof config.schema.body>}>, reply: FastifyReply) => {
+export const handler = async (request: FastifyRequest<{ Body: Static<typeof schema> }>, reply: FastifyReply) => {
     const fastify = request.server;
     const body = request.body;
 

@@ -1,18 +1,21 @@
 import { users } from '@/drizzle/schema';
+import type { RouteConfig } from '@/types/router';
 import { Type, type Static } from '@sinclair/typebox';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 
+const schema = Type.Object({
+  name: Type.String(),
+  email: Type.String({ format: 'email' }),
+  password: Type.String({ minLength: 8, maxLength: 72 }),
+})
+
 export const config = {
   schema: {
-    body: Type.Object({
-      name: Type.String(),
-      email: Type.String({ format: 'email' }),
-      password: Type.String({ minLength: 8, maxLength: 72 }),
-    }),
+    body: schema
   },
-};
+} satisfies RouteConfig;
 
-export const handler = async (request: FastifyRequest<{ Body: Static<typeof config.schema.body> }>, reply: FastifyReply) => {
+export const handler = async (request: FastifyRequest<{ Body: Static<typeof schema> }>, reply: FastifyReply) => {
   const fastify = request.server;
   const body = request.body;
 

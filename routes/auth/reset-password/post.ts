@@ -17,7 +17,7 @@ export const config = {
     }
 }
 
-export const handler = async (request: FastifyRequest<{ Body: Static<typeof config.schema.body> }>, reply: FastifyReply) => {
+export const handler = async (request: FastifyRequest<{ Body: Static<typeof schema> }>, reply: FastifyReply) => {
     const fastify = request.server;
     const body = request.body;
     let decodedPayload: { userId: string; tokenId: string; purpose: string };
