@@ -1,5 +1,5 @@
 import { userDevices, users } from "@/drizzle/schema";
-import { eComConfig } from "@/ecom.config";
+import { cookiePath, eComConfig } from "@/ecom.config";
 import { verifyHmac } from "@/utils/hmac";
 import { Type, type Static } from "@sinclair/typebox";
 import { eq } from "drizzle-orm";
@@ -41,7 +41,7 @@ export const handler = async (request: FastifyRequest<{Body: Static<typeof confi
         codeDetails.tries += 1;
         if (codeDetails.tries >= 5) {
             await fastify.valkey.del([`OTP:${uniqueId}`, `LOGIN_SESSION:${uniqueId}`]);
-            reply.clearCookie('uniqueId', { path: '/auth' })
+            reply.clearCookie('uniqueId', { path: cookiePath })
             return reply.code(400).send({ message: 'Too many attempts. Please login again.' });
         }
 
@@ -91,9 +91,10 @@ export const handler = async (request: FastifyRequest<{Body: Static<typeof confi
         httpOnly: true,
         secure: eComConfig.env.NODE_ENV === "production",
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60
+        maxAge: 7 * 24 * 60 * 60,
+        path: cookiePath
     });
-    reply.clearCookie('uniqueId', { path: '/auth' })
+    reply.clearCookie('uniqueId', { path: cookiePath })
 
     return reply.send({
         message: "User verified successfully"

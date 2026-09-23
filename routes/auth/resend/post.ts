@@ -1,3 +1,4 @@
+import { cookiePath } from "@/ecom.config";
 import { hmac } from "@/utils/hmac";
 import { TimeUnit } from "@valkey/valkey-glide";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -28,7 +29,7 @@ export const handler = async (request: FastifyRequest, reply: FastifyReply) => {
 
     if (session.resendCount >= 5) {
         await fastify.valkey.del([`LOGIN_SESSION:${uniqueId}`, `OTP:${uniqueId}`]);
-        reply.clearCookie('uniqueId', { path: '/auth' })
+        reply.clearCookie('uniqueId', { path: cookiePath })
         return reply.code(429).send({ message: 'Too many resends. Please login again.' });
     }
 

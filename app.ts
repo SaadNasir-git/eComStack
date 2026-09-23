@@ -6,6 +6,7 @@ import { eComConfig } from './ecom.config';
 import { registerPlugins } from './plugins';
 import { registerFileRoutes } from './lib/file-router';
 import { registerWorkers } from './workers';
+import { middlewaresPlugin } from './middlewares';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -13,6 +14,7 @@ const fastify = Fastify({ logger: true })
   .withTypeProvider<TypeBoxTypeProvider>();
 
 await fastify.register(registerPlugins);
+await fastify.register(middlewaresPlugin);
 await fastify.register(registerWorkers);
 
 await fastify.register(

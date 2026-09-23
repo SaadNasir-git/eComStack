@@ -1,4 +1,5 @@
 import { userDevices } from "@/drizzle/schema";
+import { cookiePath } from "@/ecom.config";
 import { eq } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
@@ -17,5 +18,5 @@ export const handler = async (request: FastifyRequest, reply: FastifyReply) => {
         }
     }
 
-    return reply.code(200).clearCookie('refreshToken', { path: '/auth' }).send({ message: 'Logged out.' });
+    return reply.code(200).clearCookie('refreshToken', { path: cookiePath }).send({ message: 'Logged out.' });
 }

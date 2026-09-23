@@ -1,4 +1,5 @@
 import { userDevices } from "@/drizzle/schema";
+import { cookiePath } from "@/ecom.config";
 import { eq } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
@@ -13,7 +14,7 @@ export const handler = async (request: FastifyRequest, reply: FastifyReply) => {
     try {
         decoded = fastify.jwt.verify<{ deviceId: string }>(refreshToken);
     } catch {
-        reply.clearCookie('refreshToken', { path: '/auth' });
+        reply.clearCookie('refreshToken', { path: cookiePath });
         return reply.code(401).send({ message: "Session expired." });
     }
 
@@ -28,5 +29,5 @@ export const handler = async (request: FastifyRequest, reply: FastifyReply) => {
             .where(eq(userDevices.userId, device.userId));
     }
 
-    return reply.code(200).clearCookie('refreshToken', { path: '/auth' }).send({ message: 'Logged out of all devices.' });
+    return reply.code(200).clearCookie('refreshToken', { path: cookiePath }).send({ message: 'Logged out of all devices.' });
 }

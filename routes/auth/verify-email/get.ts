@@ -1,7 +1,6 @@
 import { userDevices, users } from "@/drizzle/schema";
-import { eComConfig } from "@/ecom.config";
+import { cookiePath, eComConfig } from "@/ecom.config";
 import { Type, type Static } from "@sinclair/typebox";
-import { TimeUnit } from "@valkey/valkey-glide";
 import { eq } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
@@ -79,7 +78,8 @@ export const handler = async (request: FastifyRequest<{ Querystring: Static<type
         httpOnly: true,
         secure: eComConfig.env.NODE_ENV === "production",
         sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60
+        maxAge: 7 * 24 * 60 * 60,
+        path: cookiePath
     });
 
     return reply.redirect(tokenDetails.callBackUrl);

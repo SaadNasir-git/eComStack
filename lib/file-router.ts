@@ -12,17 +12,18 @@ type RouteModule = {
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 type Method = (typeof METHODS)[number];
 
-function parseRoute(relPath: string): { method: Uppercase<Method>; url: string } {
+function parseRoute(relPath: string): { method: Uppercase<Method>; url: string } | null {
   const noExt = relPath.replace(/\.(ts|js|mts|mjs)$/, '');
   const segments = noExt.split(sep);
 
-  const last = segments.pop()!;
-  const [name, maybeMethod] = last.split('.');
-  const method = (METHODS.includes(maybeMethod as Method) ? maybeMethod : 'get') as Method;
+  const last = segments[segments.length - 1]!;
 
-  const converted = [...segments, name!]
-    .filter((s) => s !== 'index')
-    .map((s) => s.replace(/^\[(.+)\]$/, ':$1'));
+  if (!METHODS.includes(last as Method)) return null;
+
+  const method = last as Method;
+  segments.pop();
+
+  const converted = segments.map((s) => s.replace(/^\[(.+)\]$/, ':$1'));
 
   const url = '/' + converted.join('/');
   return {
@@ -48,7 +49,12 @@ export async function registerFileRoutes(
 
   for (const file of files) {
     const rel = relative(routesDir, file);
-    const { method, url } = parseRoute(rel);
+    const parsed = parseRoute(rel);
+    if (!parsed) {
+      app.log.warn({ file: rel }, 'skipped route file (last segment must be an HTTP method)');
+      continue;
+    }
+    const { method, url } = parsed;
 
     const mod = (await import(pathToFileURL(file).href)) as RouteModule;
     if (typeof mod.handler !== 'function') {

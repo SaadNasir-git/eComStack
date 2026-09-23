@@ -25,7 +25,7 @@ export async function startAuthWorker(instance: FastifyInstance) {
                         subject: 'Verify your email address',
                         html: renderEmail('url', {
                             projectName,
-                            url: `${eComConfig.env.BASE_URL}/auth/verify-email?token=${token}`,
+                            url: `${eComConfig.env.BASE_URL}/${eComConfig.env.PREFIX}/auth/verify-email?token=${token}`,
                         }),
                     });
                     return;

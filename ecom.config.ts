@@ -17,3 +17,5 @@ export const eComConfig = {
     },
     projectName: process.env.PROJECT_NAME ?? 'eComStack',
 }
+
+export const cookiePath = `${eComConfig.env.PREFIX}/auth`
