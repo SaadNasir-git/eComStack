@@ -25,7 +25,6 @@ export function matchesPattern(path: string, pattern: string): boolean {
 
 let prefix = eComConfig.env.PREFIX;
 function stripPrefix(url: string, prefix: string): string {
-    // 1. Get pathname only
     let path: string;
     try {
         path = /^[a-z][a-z0-9+.-]*:\/\//i.test(url)
@@ -36,17 +35,14 @@ function stripPrefix(url: string, prefix: string): string {
     }
     if (!path.startsWith('/')) path = '/' + path;
 
-    // 2. Normalize prefix → "" or "/foo/bar"
     const p = '/' + (prefix || '').replace(/^\/+|\/+$/g, '');
     if (p === '/') return path;
 
-    // 3. Strip only on segment boundary; otherwise return as-is
     if (path === p) return '/';
     if (path.startsWith(p + '/')) {
         const rel = path.slice(p.length);
         return rel || '/';
     }
-    // URL wasn't under the prefix — return as-is (already relative, or foreign)
     return path;
 }
 
